@@ -3,44 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevOps Maturity Engine v2.8</title>
+    <title>DevOps Maturity Quick Assessment</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
-        .radar-container { position: relative; width: 100%; height: 280px; }
-        .option-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 2px solid #e2e8f0; cursor: pointer; }
-        .option-card:hover { border-color: #cbd5e1; transform: translateY(-1px); }
-        .option-card.selected { border-color: #2563eb; background-color: #f8faff; box-shadow: 0 4px 6px -1px rgb(37 99 235 / 0.1); }
+        /* --- Web UI --- */
+        .radar-box { position: relative; width: 100%; height: 320px; }
+        .radar-box-large { position: relative; width: 100%; height: 420px; }
+        .option-card { transition: all 0.2s ease; border: 2px solid #e2e8f0; cursor: pointer; }
+        .option-card.selected { border-color: #2563eb; background-color: #f8faff; }
         .progress-bar-fill { transition: width 0.6s ease-out; }
+
+        /* --- PDF Export Styles --- */
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
-            body { background: white !important; -webkit-print-color-adjust: exact; }
-            .card { border: 1px solid #e2e8f0 !important; break-inside: avoid; margin-bottom: 12px; }
+            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
+            
+            /* Center the entire layout */
+            #app-content { max-width: 100% !important; width: 100% !important; padding: 0 !important; }
+            .grid { display: block !important; }
+            .lg\:col-span-8, .lg\:col-span-4 { width: 100% !important; }
+
+            /* Centering the Cards */
+            .card { 
+                border: 1px solid #e2e8h0 !important;
+                width: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important; /* Centering horizontally */
+                justify-content: center !important;
+                margin-bottom: 40px !important;
+                break-inside: avoid;
+                padding: 40px 0 !important;
+            }
+
+            /* Enlarging the Radar Charts */
+            .radar-box { height: 550px !important; width: 85% !important; margin: 0 auto !important; }
+            .radar-box-large { height: 850px !important; width: 95% !important; margin: 0 auto !important; }
+            
+            canvas { margin: 0 auto !important; }
+
+            header { border-bottom: 2px solid #334155 !important; margin-bottom: 40px !important; }
+            #print-details { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 15px !important; }
+            @page { margin: 1cm; size: A4; }
         }
         .print-only { display: none; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 font-sans tracking-tight">
     <div id="app-content" class="max-w-7xl mx-auto p-4 md:p-8">
         <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b pb-6 border-slate-200">
             <div>
-                <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">DevOps Maturity Engine</h1>
-                <p class="text-slate-400 text-sm font-medium">Build v2.8 • Precision Evaluator</p>
+                <h1 class="text-2xl font-black text-slate-900 uppercase">DevOps Maturity Quick Assessment</h1>
+                <p class="text-slate-400 text-sm font-medium uppercase tracking-tighter">Strategic Insights Tool • v3.8</p>
             </div>
-            <div class="bg-slate-900 text-white px-8 py-4 rounded-2xl flex items-center gap-6 shadow-2xl">
+            <div class="bg-slate-900 text-white px-8 py-4 rounded-2xl flex items-center gap-6 shadow-xl no-print">
                 <div class="text-right border-r border-slate-700 pr-4">
-                    <span class="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Global Maturity Index</span>
+                    <span class="block text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1 text-nowrap">Maturity Index</span>
                     <span class="text-xs font-bold text-blue-400">Weighted Result</span>
                 </div>
-                <span id="global-score-display" class="text-4xl font-black font-mono">0.00</span>
+                <span id="global-score-display" class="text-4xl font-black font-mono leading-none">0.00</span>
+            </div>
+            <div class="print-only text-right">
+                <p class="text-[10px] font-black uppercase text-slate-400">Global Maturity Score</p>
+                <p id="global-score-print" class="text-6xl font-black text-blue-600">0.00</p>
             </div>
         </header>
 
         <div class="mb-8 no-print bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex justify-between items-end mb-3">
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assessment Progress</span>
-                <span id="progress-text" class="text-[10px] font-bold text-blue-600 font-mono">0 / 23 COMPLETED</span>
+            <div class="flex justify-between items-end mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <span>Completion</span>
+                <span id="progress-text" class="text-blue-600">0 / 23 COMPLETED</span>
             </div>
             <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                 <div id="progress-bar" class="bg-blue-600 h-full progress-bar-fill" style="width: 0%"></div>
@@ -55,35 +89,30 @@
 
             <div class="lg:col-span-4 space-y-6">
                 <div class="bg-white p-6 rounded-3xl border card shadow-lg">
-                    <h3 class="font-black text-center mb-6 uppercase text-slate-400 text-[9px] tracking-[0.2em]">Category Analysis</h3>
-                    <div class="radar-container"><canvas id="catChart"></canvas></div>
+                    <h3 class="font-black text-center mb-6 uppercase text-slate-400 text-[9px] tracking-[0.2em]">Macro View</h3>
+                    <div class="radar-box"><canvas id="catChart"></canvas></div>
                 </div>
+                
                 <div class="bg-white p-6 rounded-3xl border card shadow-lg">
-                    <h3 class="font-black text-center mb-6 uppercase text-slate-400 text-[9px] tracking-[0.2em]">Full Capability Map</h3>
-                    <div class="radar-container"><canvas id="capChart"></canvas></div>
+                    <h3 class="font-black text-center mb-6 uppercase text-slate-400 text-[9px] tracking-[0.2em]">Micro View</h3>
+                    <div class="radar-box-large"><canvas id="capChart"></canvas></div>
                     <button id="export-btn" disabled class="w-full mt-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all duration-300 no-print bg-slate-200 text-slate-400 cursor-not-allowed">
-                        Answer all to Unlock Report
+                        Answer All to Export
                     </button>
                 </div>
             </div>
         </div>
 
         <div class="mt-12 pt-8 border-t border-slate-300 print-only">
-            <h2 class="text-xl font-black mb-8 text-slate-900 border-l-8 border-blue-600 pl-4 uppercase tracking-tighter">Full Assessment Audit Trail</h2>
-            <div id="print-details" class="grid grid-cols-2 gap-4"></div>
+            <h2 class="text-xl font-black mb-8 text-slate-900 border-l-8 border-blue-600 pl-4 uppercase text-center">Assessment Audit Trail</h2>
+            <div id="print-details"></div>
         </div>
     </div>
 
     <script>
         "use strict";
-
-        // --- Core Data (Strictly Mapped from Sheet) ---
         const DATA = {
-            categories: [
-                { id: 'Technical', weight: 0.45 },
-                { id: 'Process', weight: 0.35 },
-                { id: 'Cultural', weight: 0.20 }
-            ],
+            categories: [{ id: 'Technical', weight: 0.45 }, { id: 'Process', weight: 0.35 }, { id: 'Cultural', weight: 0.20 }],
             capabilities: [
                 { id: 1, catId: 'Technical', weight: 1.0, name: 'Version control', levels: ["Only app code is in Git; configs are local or on servers.", "Code and environment configs in Git; secrets are often plaintext.", "Infrastructure as Code (IaC) for all environments; secrets in a vault.", "Everything-as-Code; the repo is the sole source of truth for all environments."] },
                 { id: 2, catId: 'Technical', weight: 1.2, name: 'Trunk-based development', levels: ["Branches live >1 week; merge conflicts are frequent.", "Branches live 3-5 days; code reviews are manual bottlenecks.", "Branches live <24 hours; daily merges to the main branch.", "Pure Trunk; all devs work on main; feature flags decouple code from release."] },
@@ -107,74 +136,59 @@
                 { id: 20, catId: 'Process', weight: 0.9, name: 'Biz-driven monitoring', levels: ["Tech alerts only (CPU/RAM); business data in separate silos.", "Business data analyzed monthly; not linked to technical metrics.", "Business KPIs (Revenue/Conversion) are part of tech dashboards.", "Business SLOs; if conversion drops, an engineer gets paged."] },
                 { id: 21, catId: 'Process', weight: 0.9, name: 'Failure notification', levels: ["Customers find bugs first via the support line.", "Threshold alerts exist but fire too often (alert fatigue).", "Alerts fire based on SLIs before users notice degradation.", "Predictive Healing; monitoring triggers auto-scaling or failover."] },
                 { id: 22, catId: 'Cultural', weight: 1.0, name: 'Generative culture', levels: ["Pathological: Power-oriented; messengers are shot.", "Bureaucratic: Rule-oriented; \"Not my job\" mentality.", "Performance: Performance-oriented; high trust; no-blame.", "Generative: Mission-driven; radical transparency; high trust."] },
-                { id: 23, catId: 'Cultural', weight: 1.0, name: 'Learning culture', levels: ["Training is seen as a cost/burden; no time for learning.", "Training budget exists but is rarely used or protected.", "Regular tech-talks; 10% time dedicated to learning/spikes.", "Knowledge Obsessed; learning is the default mode of work."] }
+                { id: 23, catId: 'Cultural', weight: 1.0, name: 'Learning culture', levels: ["Training is seen as a cost/burden; no time for learning.", "Training budget exists but is rarely used or protected.", "Regular tech-talk talk; 10% time dedicated to learning/spikes.", "Knowledge Obsessed; learning is the default mode of work."] }
             ]
         };
 
-        // --- State Management ---
-        let state = {
-            currentTab: 'Technical',
-            scores: {},
-            charts: { cat: null, cap: null }
-        };
+        let state = { currentTab: 'Technical', scores: {}, charts: { cat: null, cap: null } };
 
-        // --- Controller Functions ---
         function initApp() {
-            try {
-                renderTabs();
-                renderQuestions();
-                initCharts();
-                updateUI();
-                
-                document.getElementById('export-btn').addEventListener('click', () => window.print());
-            } catch (err) {
-                console.error("Initialization Failed:", err);
-            }
+            renderTabs();
+            renderQuestions();
+            setTimeout(initCharts, 400);
+            document.getElementById('export-btn').onclick = () => {
+                // Force charts to resize to print container before triggering window.print
+                state.charts.cat.resize();
+                state.charts.cap.resize();
+                window.print();
+            };
         }
 
         function renderTabs() {
             const container = document.getElementById('tab-container');
             container.innerHTML = DATA.categories.map(cat => `
                 <button onclick="switchTab('${cat.id}')" id="tab-${cat.id}" 
-                    class="flex-1 py-3 rounded-lg font-black text-[10px] tracking-widest transition-all duration-300 ${state.currentTab === cat.id ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}">
-                    ${cat.id.toUpperCase()}
+                    class="flex-1 py-3 rounded-lg font-black text-[9px] tracking-widest transition-all uppercase ${state.currentTab === cat.id ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}">
+                    ${cat.id}
                 </button>
             `).join('');
         }
 
-        function switchTab(id) {
-            state.currentTab = id;
-            renderTabs();
-            renderQuestions();
-        }
+        function switchTab(id) { state.currentTab = id; renderTabs(); renderQuestions(); }
 
         function renderQuestions() {
             const container = document.getElementById('questions-container');
             const items = DATA.capabilities.filter(c => c.catId === state.currentTab);
-            
             container.innerHTML = items.map(cap => `
-                <div class="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div>
                     <h3 class="text-base font-black text-slate-800 mb-5 flex items-center">
-                        <span class="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center mr-3 text-xs font-mono">${cap.id}</span>
+                        <span class="w-7 h-7 bg-slate-900 text-white rounded flex items-center justify-center mr-3 text-[10px] font-mono">${cap.id}</span>
                         ${cap.name}
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         ${cap.levels.map((lvl, i) => {
                             const active = state.scores[cap.id] === (i + 1);
                             return `
-                                <div onclick="handleSelect(${cap.id}, ${i + 1})" 
-                                    class="option-card p-5 rounded-2xl ${active ? 'selected' : 'bg-white border-slate-200'}">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <span class="text-[9px] font-black px-2.5 py-1 rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'} uppercase tracking-tighter">Level ${i+1}</span>
-                                        ${active ? '<span class="text-blue-600 text-sm">✓</span>' : ''}
+                                <div onclick="handleSelect(${cap.id}, ${i + 1})" class="option-card p-4 rounded-xl ${active ? 'selected border-blue-600' : 'bg-white border-slate-200'}">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-[8px] font-black px-2 py-0.5 rounded ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'} uppercase">Level ${i+1}</span>
+                                        ${active ? '<span class="text-blue-600 font-bold text-xs">✓</span>' : ''}
                                     </div>
-                                    <p class="text-[11px] leading-relaxed ${active ? 'text-slate-900 font-bold' : 'text-slate-500 font-medium'}">${lvl}</p>
-                                </div>
-                            `;
+                                    <div class="text-xs leading-snug ${active ? 'text-slate-900 font-semibold' : 'text-slate-500'}">${lvl}</div>
+                                </div>`;
                         }).join('')}
                     </div>
-                </div>
-            `).join('');
+                </div>`).join('');
         }
 
         function handleSelect(capId, score) {
@@ -190,20 +204,18 @@
             const total = DATA.capabilities.length;
             const pct = Math.round((answered / total) * 100);
 
-            // Update Progress
             document.getElementById('progress-bar').style.width = pct + '%';
             document.getElementById('progress-text').innerText = `${answered} / ${total} COMPLETED`;
             document.getElementById('global-score-display').innerText = stats.global;
+            document.getElementById('global-score-print').innerText = stats.global;
 
-            // Update Export Button
             const btn = document.getElementById('export-btn');
             if (answered === total) {
                 btn.disabled = false;
-                btn.innerText = 'Generate Assessment Report';
-                btn.className = "w-full mt-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all duration-300 no-print bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-200 cursor-pointer";
+                btn.innerText = 'EXPORT REPORT';
+                btn.className = "w-full mt-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all duration-300 no-print bg-blue-600 text-white hover:bg-blue-700 shadow-xl cursor-pointer";
             }
 
-            // Sync Charts
             if (state.charts.cat) {
                 state.charts.cat.data.datasets[0].data = DATA.categories.map(c => stats.categories[c.id]);
                 state.charts.cat.update();
@@ -218,37 +230,51 @@
             const categoryAvg = {};
             DATA.categories.forEach(cat => {
                 const caps = DATA.capabilities.filter(c => c.catId === cat.id);
-                let sumW = 0, totalW = 0;
+                let wSum = 0, wTotal = 0;
                 caps.forEach(c => {
                     const s = state.scores[c.id] || 0;
-                    if (s > 0) { sumW += s * c.weight; totalW += c.weight; }
+                    if (s > 0) { wSum += s * c.weight; wTotal += c.weight; }
                 });
-                categoryAvg[cat.id] = totalW > 0 ? (sumW / totalW).toFixed(2) : 0;
+                categoryAvg[cat.id] = wTotal > 0 ? (wSum / wTotal).toFixed(2) : 0;
             });
-
             let finalSum = 0, finalW = 0;
             DATA.categories.forEach(cat => {
                 const s = parseFloat(categoryAvg[cat.id]);
                 if (s > 0) { finalSum += s * cat.weight; finalW += cat.weight; }
             });
-            const global = finalW > 0 ? (finalSum / finalW).toFixed(2) : "0.00";
-
-            return { categories: categoryAvg, global };
+            return { categories: categoryAvg, global: finalW > 0 ? (finalSum / finalW).toFixed(2) : "0.00" };
         }
 
         function initCharts() {
-            const options = { scales: { r: { min: 0, max: 4, grid: { color: '#e2e8f0' }, angleLines: { color: '#e2e8f0' }, pointLabels: { font: { size: 9, weight: 'bold' } } } }, maintainAspectRatio: false, plugins: { legend: { display: false } } };
-            
-            state.charts.cat = new Chart(document.getElementById('catChart'), {
+            const baseConfig = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    r: {
+                        min: 0, max: 4,
+                        ticks: { display: false, stepSize: 1 },
+                        grid: { color: 'rgba(0,0,0,0.1)' },
+                        angleLines: { color: 'rgba(0,0,0,0.1)' },
+                        pointLabels: { font: { size: 10, weight: 'bold' }, color: '#475569', padding: 15 }
+                    }
+                }
+            };
+
+            const capOptions = JSON.parse(JSON.stringify(baseConfig));
+            capOptions.scales.r.pointLabels.font.size = 8;
+            capOptions.scales.r.pointLabels.padding = 10;
+
+            state.charts.cat = new Chart(document.getElementById('catChart').getContext('2d'), {
                 type: 'radar',
-                data: { labels: DATA.categories.map(c => c.id), datasets: [{ data: [0,0,0], backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#2563eb', borderWidth: 2, pointRadius: 3 }] },
-                options: options
+                data: { labels: DATA.categories.map(c => c.id), datasets: [{ data: [0,0,0], backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#2563eb', borderWidth: 2 }] },
+                options: baseConfig
             });
 
-            state.charts.cap = new Chart(document.getElementById('capChart'), {
+            state.charts.cap = new Chart(document.getElementById('capChart').getContext('2d'), {
                 type: 'radar',
-                data: { labels: DATA.capabilities.map(c => c.id), datasets: [{ data: Array(23).fill(0), backgroundColor: 'rgba(147, 51, 234, 0.1)', borderColor: '#9333ea', borderWidth: 1, pointRadius: 0 }] },
-                options: options
+                data: { labels: DATA.capabilities.map(c => c.name), datasets: [{ data: Array(23).fill(0), backgroundColor: 'rgba(147, 51, 234, 0.1)', borderColor: '#9333ea', borderWidth: 2 }] },
+                options: capOptions
             });
         }
 
@@ -257,18 +283,16 @@
             container.innerHTML = DATA.capabilities.map(cap => {
                 const s = state.scores[cap.id];
                 return `
-                    <div class="p-4 border border-slate-200 rounded-xl bg-white break-inside-avoid">
-                        <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
-                            <span class="text-[10px] font-black text-slate-800 uppercase">${cap.id}. ${cap.name}</span>
-                            <span class="text-[9px] px-2 py-0.5 rounded bg-slate-900 text-white font-bold">${s ? 'LVL '+s : 'N/A'}</span>
+                    <div class="p-3 border border-slate-200 rounded-lg bg-white break-inside-avoid shadow-sm mb-2">
+                        <div class="flex justify-between items-center mb-1 border-b pb-1">
+                            <span class="text-[9px] font-black text-slate-800 uppercase leading-none">${cap.id}. ${cap.name}</span>
+                            <span class="text-[8px] px-1.5 py-0.5 rounded bg-slate-900 text-white font-bold leading-none">${s ? 'L'+s : 'N/A'}</span>
                         </div>
-                        <p class="text-[9px] text-slate-500 leading-relaxed italic">${s ? cap.levels[s-1] : 'No input provided.'}</p>
-                    </div>
-                `;
+                        <div class="text-[8px] text-slate-500 italic mt-1 leading-tight">${s ? cap.levels[s-1] : 'No data provided.'}</div>
+                    </div>`;
             }).join('');
         }
 
-        // Wait for both DOM and External Scripts (Chart.js)
         window.addEventListener('load', initApp);
     </script>
 </body>
