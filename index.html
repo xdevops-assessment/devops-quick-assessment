@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Maturity Engine v2.8</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        .radar-container { position: relative; width: 100%; height: 280px; }
+        .option-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 2px solid #e2e8f0; cursor: pointer; }
+        .option-card:hover { border-color: #cbd5e1; transform: translateY(-1px); }
+        .option-card.selected { border-color: #2563eb; background-color: #f8faff; box-shadow: 0 4px 6px -1px rgb(37 99 235 / 0.1); }
+        .progress-bar-fill { transition: width 0.6s ease-out; }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; -webkit-print-color-adjust: exact; }
+            .card { border: 1px solid #e2e8f0 !important; break-inside: avoid; margin-bottom: 12px; }
+        }
+        .print-only { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="app-content" class="max-w-7xl mx-auto p-4 md:p-8">
+        <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b pb-6 border-slate-200">
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">DevOps Maturity Engine</h1>
+                <p class="text-slate-400 text-sm font-medium">Build v2.8 • Precision Evaluator</p>
+            </div>
+            <div class="bg-slate-900 text-white px-8 py-4 rounded-2xl flex items-center gap-6 shadow-2xl">
+                <div class="text-right border-r border-slate-700 pr-4">
+                    <span class="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Global Maturity Index</span>
+                    <span class="text-xs font-bold text-blue-400">Weighted Result</span>
+                </div>
+                <span id="global-score-display" class="text-4xl font-black font-mono">0.00</span>
+            </div>
+        </header>
+
+        <div class="mb-8 no-print bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex justify-between items-end mb-3">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assessment Progress</span>
+                <span id="progress-text" class="text-[10px] font-bold text-blue-600 font-mono">0 / 23 COMPLETED</span>
+            </div>
+            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                <div id="progress-bar" class="bg-blue-600 h-full progress-bar-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-8 no-print">
+                <div class="flex bg-slate-200 p-1.5 rounded-xl mb-8 space-x-1" id="tab-container"></div>
+                <div id="questions-container" class="space-y-12"></div>
+            </div>
+
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-white p-6 rounded-3xl border card shadow-lg">
+                    <h3 class="font-black text-center mb-6 uppercase text-slate-400 text-[9px] tracking-[0.2em]">Category Analysis</h3>
+                    <div class="radar-container"><canvas id="catChart"></canvas></div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl border card shadow-lg">
+                    <h3 class="font-black text-center mb-6 uppercase text-slate-400 text-[9px] tracking-[0.2em]">Full Capability Map</h3>
+                    <div class="radar-container"><canvas id="capChart"></canvas></div>
+                    <button id="export-btn" disabled class="w-full mt-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all duration-300 no-print bg-slate-200 text-slate-400 cursor-not-allowed">
+                        Answer all to Unlock Report
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-12 pt-8 border-t border-slate-300 print-only">
+            <h2 class="text-xl font-black mb-8 text-slate-900 border-l-8 border-blue-600 pl-4 uppercase tracking-tighter">Full Assessment Audit Trail</h2>
+            <div id="print-details" class="grid grid-cols-2 gap-4"></div>
+        </div>
+    </div>
+
+    <script>
+        "use strict";
+
+        // --- Core Data (Strictly Mapped from Sheet) ---
+        const DATA = {
+            categories: [
+                { id: 'Technical', weight: 0.45 },
+                { id: 'Process', weight: 0.35 },
+                { id: 'Cultural', weight: 0.20 }
+            ],
+            capabilities: [
+                { id: 1, catId: 'Technical', weight: 1.0, name: 'Version control', levels: ["Only app code is in Git; configs are local or on servers.", "Code and environment configs in Git; secrets are often plaintext.", "Infrastructure as Code (IaC) for all environments; secrets in a vault.", "Everything-as-Code; the repo is the sole source of truth for all environments."] },
+                { id: 2, catId: 'Technical', weight: 1.2, name: 'Trunk-based development', levels: ["Branches live >1 week; merge conflicts are frequent.", "Branches live 3-5 days; code reviews are manual bottlenecks.", "Branches live <24 hours; daily merges to the main branch.", "Pure Trunk; all devs work on main; feature flags decouple code from release."] },
+                { id: 3, catId: 'Technical', weight: 1.0, name: 'Continuous integration', levels: ["Manual builds or infrequent \"nightly\" builds.", "Auto-build on commit; unit tests are minimal or bypassed.", "Full auto-test suite; feedback provided in <15 mins.", "Extreme CI; CI failure blocks all merges; master is always green."] },
+                { id: 4, catId: 'Technical', weight: 1.0, name: 'Test automation', levels: ["Almost entirely manual regression testing.", "Some auto-tests exist, but failures are frequent and handled manually.", "Test pyramid (Unit/API/UI) is implemented; tests gate the pipeline.", "Continuous Testing; no \"manual sign-off\" required for production release."] },
+                { id: 5, catId: 'Technical', weight: 0.8, name: 'Test data management', levels: ["Manual data entry; static, stale database snapshots.", "Scripted data export exists, but no masking for sensitive data.", "Data-on-Demand; masked, versioned test datasets available via API.", "Self-Service; fresh, masked data is auto-provisioned in the pipeline."] },
+                { id: 6, catId: 'Technical', weight: 1.2, name: 'Deployment automation', levels: ["Manual deployments; reliance on checklists.", "Scripted deployments, but require manual triggers for each environment.", "Fully automated; no human logs into production for deployment.", "Zero-Touch; Canary/Blue-Green with auto-rollback based on health SLIs."] },
+                { id: 7, catId: 'Technical', weight: 0.8, name: 'Database change management', levels: ["DBA manually executes SQL; no versioning or history.", "SQL in Git, but DBA manually executes via a ticket system.", "Automated migrations (schema-as-code) versioned with app code.", "Schema Decoupling; DB changes are backward compatible; auto-rollbacks."] },
+                { id: 8, catId: 'Technical', weight: 1.0, name: 'Continuous delivery', levels: ["Release depends on manual \"war rooms\" and big-bang merges.", "Predictable but infrequent releases; manual handoffs.", "Release is a push-button, non-event business decision.", "Always Deployable; code is ready for production at every commit."] },
+                { id: 9, catId: 'Technical', weight: 1.0, name: 'Shifting left on security', levels: ["Security is a final gate; audit happens once a year.", "Pipeline has scans for reporting, but they do not block releases.", "Security gates auto-block high-risk vulnerabilities in CI.", "Sec-as-Code; automated SBOM and runtime security enforcement."] },
+                { id: 10, catId: 'Technical', weight: 0.9, name: 'Monitoring and observability', levels: ["Basic resource alerts only (CPU/RAM); box-hopping.", "Log aggregation with threshold alerts; monitoring is siloed.", "Metrics, Logs, and Tracing are linked for root-cause analysis.", "Predictive Obs; monitoring predicts failures and suggests root causes."] },
+                { id: 11, catId: 'Technical', weight: 0.8, name: 'Flexible infrastructure', levels: ["Provisioning requires a ticket and takes days/weeks.", "Cloud/VMs/Containers used, but provisioning is semi-manual/ticket-based.", "Self-Service; developers provision environments via API/IaC.", "Elastic; automatic right-sizing and dynamic scaling."] },
+                { id: 12, catId: 'Technical', weight: 0.9, name: 'Loosely coupled architecture', levels: ["Monolith; one change requires a full system reboot.", "Service-oriented but shares a single database.", "Microservices implemented; contract testing ensures independence.", "Independent Release; teams deploy without cross-team sync."] },
+                { id: 13, catId: 'Process', weight: 1.0, name: 'Working in small batches', levels: ["Monthly/Quarterly cycles; big-bang feature sets.", "Bi-weekly sprints; releases include many features.", "Features split into <3 days of work; weekly releases.", "Atomic Flow; requirements split into <1 day of work; daily releases."] },
+                { id: 14, catId: 'Process', weight: 1.0, name: 'Visibility of work', levels: ["Progress is hidden in emails or individual updates.", "Shared boards used for Dev, but Ops/Infra work is hidden.", "End-to-End transparency from \"Idea\" to \"Live\" on one board.", "Real-time VSM; automatic identification of wait-times and bottlenecks."] },
+                { id: 15, catId: 'Process', weight: 0.8, name: 'Visual management', levels: ["No boards or outdated whiteboards.", "Boards exist but are not updated in real-time.", "Automated dashboards showing WIP, Lead Time, and Quality.", "Actionable Viz; dashboards show anomalies and auto-trigger alerts."] },
+                { id: 16, catId: 'Process', weight: 1.0, name: 'WIP limits', levels: ["High context switching (3-5 tasks per person).", "\"Resource utilization\" is the goal; everyone is 100% busy.", "Strict WIP limits enforced; focus is on \"Stop starting, start finishing\".", "Pull-based; WIP limits are dynamically adjusted based on flow."] },
+                { id: 17, catId: 'Process', weight: 1.2, name: 'Change approval', levels: ["Every change requires a Change Advisory Board (CAB) meeting.", "Standard changes fast-tracked; others take days for approval.", "Peer review and automated gates are the primary approval method.", "Zero-Meeting Approval; fully automated based on quality scores."] },
+                { id: 18, catId: 'Process', weight: 1.0, name: 'Customer feedback', levels: ["Feedback is gathered every few months via formal surveys.", "Monthly analysis of customer support tickets or usage data.", "A/B testing and usage data drive the next sprint's priority.", "Live Experimentation; real-time user behavior auto-adjusts UX/UI."] },
+                { id: 19, catId: 'Process', weight: 1.0, name: 'Team experimentation', levels: ["Developers are told exactly what to build and how.", "Teams suggest tools but need several levels of approval.", "Teams solve problems autonomously and pick their own tools.", "Learning Org; failure is an investment; teams pivot fast."] },
+                { id: 20, catId: 'Process', weight: 0.9, name: 'Biz-driven monitoring', levels: ["Tech alerts only (CPU/RAM); business data in separate silos.", "Business data analyzed monthly; not linked to technical metrics.", "Business KPIs (Revenue/Conversion) are part of tech dashboards.", "Business SLOs; if conversion drops, an engineer gets paged."] },
+                { id: 21, catId: 'Process', weight: 0.9, name: 'Failure notification', levels: ["Customers find bugs first via the support line.", "Threshold alerts exist but fire too often (alert fatigue).", "Alerts fire based on SLIs before users notice degradation.", "Predictive Healing; monitoring triggers auto-scaling or failover."] },
+                { id: 22, catId: 'Cultural', weight: 1.0, name: 'Generative culture', levels: ["Pathological: Power-oriented; messengers are shot.", "Bureaucratic: Rule-oriented; \"Not my job\" mentality.", "Performance: Performance-oriented; high trust; no-blame.", "Generative: Mission-driven; radical transparency; high trust."] },
+                { id: 23, catId: 'Cultural', weight: 1.0, name: 'Learning culture', levels: ["Training is seen as a cost/burden; no time for learning.", "Training budget exists but is rarely used or protected.", "Regular tech-talks; 10% time dedicated to learning/spikes.", "Knowledge Obsessed; learning is the default mode of work."] }
+            ]
+        };
+
+        // --- State Management ---
+        let state = {
+            currentTab: 'Technical',
+            scores: {},
+            charts: { cat: null, cap: null }
+        };
+
+        // --- Controller Functions ---
+        function initApp() {
+            try {
+                renderTabs();
+                renderQuestions();
+                initCharts();
+                updateUI();
+                
+                document.getElementById('export-btn').addEventListener('click', () => window.print());
+            } catch (err) {
+                console.error("Initialization Failed:", err);
+            }
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('tab-container');
+            container.innerHTML = DATA.categories.map(cat => `
+                <button onclick="switchTab('${cat.id}')" id="tab-${cat.id}" 
+                    class="flex-1 py-3 rounded-lg font-black text-[10px] tracking-widest transition-all duration-300 ${state.currentTab === cat.id ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}">
+                    ${cat.id.toUpperCase()}
+                </button>
+            `).join('');
+        }
+
+        function switchTab(id) {
+            state.currentTab = id;
+            renderTabs();
+            renderQuestions();
+        }
+
+        function renderQuestions() {
+            const container = document.getElementById('questions-container');
+            const items = DATA.capabilities.filter(c => c.catId === state.currentTab);
+            
+            container.innerHTML = items.map(cap => `
+                <div class="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <h3 class="text-base font-black text-slate-800 mb-5 flex items-center">
+                        <span class="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center mr-3 text-xs font-mono">${cap.id}</span>
+                        ${cap.name}
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        ${cap.levels.map((lvl, i) => {
+                            const active = state.scores[cap.id] === (i + 1);
+                            return `
+                                <div onclick="handleSelect(${cap.id}, ${i + 1})" 
+                                    class="option-card p-5 rounded-2xl ${active ? 'selected' : 'bg-white border-slate-200'}">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <span class="text-[9px] font-black px-2.5 py-1 rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'} uppercase tracking-tighter">Level ${i+1}</span>
+                                        ${active ? '<span class="text-blue-600 text-sm">✓</span>' : ''}
+                                    </div>
+                                    <p class="text-[11px] leading-relaxed ${active ? 'text-slate-900 font-bold' : 'text-slate-500 font-medium'}">${lvl}</p>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function handleSelect(capId, score) {
+            state.scores[capId] = score;
+            renderQuestions();
+            updateUI();
+            renderPrintDetails();
+        }
+
+        function updateUI() {
+            const stats = calculateWeightedResults();
+            const answered = Object.keys(state.scores).length;
+            const total = DATA.capabilities.length;
+            const pct = Math.round((answered / total) * 100);
+
+            // Update Progress
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-text').innerText = `${answered} / ${total} COMPLETED`;
+            document.getElementById('global-score-display').innerText = stats.global;
+
+            // Update Export Button
+            const btn = document.getElementById('export-btn');
+            if (answered === total) {
+                btn.disabled = false;
+                btn.innerText = 'Generate Assessment Report';
+                btn.className = "w-full mt-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all duration-300 no-print bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-200 cursor-pointer";
+            }
+
+            // Sync Charts
+            if (state.charts.cat) {
+                state.charts.cat.data.datasets[0].data = DATA.categories.map(c => stats.categories[c.id]);
+                state.charts.cat.update();
+            }
+            if (state.charts.cap) {
+                state.charts.cap.data.datasets[0].data = DATA.capabilities.map(c => state.scores[c.id] || 0);
+                state.charts.cap.update();
+            }
+        }
+
+        function calculateWeightedResults() {
+            const categoryAvg = {};
+            DATA.categories.forEach(cat => {
+                const caps = DATA.capabilities.filter(c => c.catId === cat.id);
+                let sumW = 0, totalW = 0;
+                caps.forEach(c => {
+                    const s = state.scores[c.id] || 0;
+                    if (s > 0) { sumW += s * c.weight; totalW += c.weight; }
+                });
+                categoryAvg[cat.id] = totalW > 0 ? (sumW / totalW).toFixed(2) : 0;
+            });
+
+            let finalSum = 0, finalW = 0;
+            DATA.categories.forEach(cat => {
+                const s = parseFloat(categoryAvg[cat.id]);
+                if (s > 0) { finalSum += s * cat.weight; finalW += cat.weight; }
+            });
+            const global = finalW > 0 ? (finalSum / finalW).toFixed(2) : "0.00";
+
+            return { categories: categoryAvg, global };
+        }
+
+        function initCharts() {
+            const options = { scales: { r: { min: 0, max: 4, grid: { color: '#e2e8f0' }, angleLines: { color: '#e2e8f0' }, pointLabels: { font: { size: 9, weight: 'bold' } } } }, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+            
+            state.charts.cat = new Chart(document.getElementById('catChart'), {
+                type: 'radar',
+                data: { labels: DATA.categories.map(c => c.id), datasets: [{ data: [0,0,0], backgroundColor: 'rgba(37, 99, 235, 0.1)', borderColor: '#2563eb', borderWidth: 2, pointRadius: 3 }] },
+                options: options
+            });
+
+            state.charts.cap = new Chart(document.getElementById('capChart'), {
+                type: 'radar',
+                data: { labels: DATA.capabilities.map(c => c.id), datasets: [{ data: Array(23).fill(0), backgroundColor: 'rgba(147, 51, 234, 0.1)', borderColor: '#9333ea', borderWidth: 1, pointRadius: 0 }] },
+                options: options
+            });
+        }
+
+        function renderPrintDetails() {
+            const container = document.getElementById('print-details');
+            container.innerHTML = DATA.capabilities.map(cap => {
+                const s = state.scores[cap.id];
+                return `
+                    <div class="p-4 border border-slate-200 rounded-xl bg-white break-inside-avoid">
+                        <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
+                            <span class="text-[10px] font-black text-slate-800 uppercase">${cap.id}. ${cap.name}</span>
+                            <span class="text-[9px] px-2 py-0.5 rounded bg-slate-900 text-white font-bold">${s ? 'LVL '+s : 'N/A'}</span>
+                        </div>
+                        <p class="text-[9px] text-slate-500 leading-relaxed italic">${s ? cap.levels[s-1] : 'No input provided.'}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Wait for both DOM and External Scripts (Chart.js)
+        window.addEventListener('load', initApp);
+    </script>
+</body>
+</html>
